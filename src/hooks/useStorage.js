@@ -33,50 +33,54 @@ if (!localStorage.getItem(DB_KEY)) {
 export function useStorage() {
   const [db, setDb] = useState(readDB());
 
-  // Listen to changes (if we had multiple tabs, but here it's an electron app)
+  // Single source of truth mutation
+  const mutateDB = (updater) => {
+    const currentDb = readDB(); // Garante o state original verdadeiro em tempo real
+    const newDb = typeof updater === 'function' ? updater(currentDb) : updater;
+    writeDB(newDb);
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  // Listen to changes from mutations
   useEffect(() => {
     const handleStorage = () => setDb(readDB());
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  const saveDb = (newDb) => {
-    writeDB(newDb);
-    setDb(newDb);
-    // Dispatch custom event to notify other components inside the same tab
-    window.dispatchEvent(new Event('storage'));
-  };
-
   // Helper funcs
   const login = (userId) => {
-    saveDb({ ...db, currentUser: userId });
+    mutateDB(prev => ({ ...prev, currentUser: userId }));
   };
 
   const logout = () => {
-    saveDb({ ...db, currentUser: null });
+    mutateDB(prev => ({ ...prev, currentUser: null }));
   };
 
   const addUser = (user) => {
-    const newDb = { ...db, users: [...db.users, user] };
-    saveDb(newDb);
+    mutateDB(prev => ({ ...prev, users: [...prev.users, user] }));
   };
 
   const addTask = (task) => {
-    saveDb({ ...db, tasks: [...db.tasks, task] });
+    mutateDB(prev => ({ ...prev, tasks: [...prev.tasks, task] }));
   };
 
   const updateTask = (updatedTask) => {
-    const updatedTasks = db.tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
-    saveDb({ ...db, tasks: updatedTasks });
+    mutateDB(prev => {
+      const updatedTasks = prev.tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
+      return { ...prev, tasks: updatedTasks };
+    });
   };
 
   const updateTasks = (newTasksList) => {
-    saveDb({ ...db, tasks: newTasksList });
+    mutateDB(prev => ({ ...prev, tasks: newTasksList }));
   }
 
   const removeTask = (taskId) => {
-    const updatedTasks = db.tasks.filter(t => t.id !== taskId);
-    saveDb({ ...db, tasks: updatedTasks });
+    mutateDB(prev => {
+      const updatedTasks = prev.tasks.filter(t => t.id !== taskId);
+      return { ...prev, tasks: updatedTasks };
+    });
   };
 
   // Current logged in user object
